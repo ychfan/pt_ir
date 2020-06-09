@@ -60,6 +60,8 @@ pt_ir/data/Urban100/*.png
 ```
 
 ## Related repos
-[[WDSR]](https://github.com/ychfan/wdsr) Wide Activation for Efficient Image and Video Super-Resolution
+[[NSR]](https://github.com/ychfan/nsr) Neural Sparse Representation for Image Restoration
 
 [[SCN]](https://github.com/ychfan/scn) Scale-wise Convolution for Image Restoration
+
+[[WDSR]](https://github.com/ychfan/wdsr) Wide Activation for Efficient Image and Video Super-Resolution
