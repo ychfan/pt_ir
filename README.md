@@ -3,11 +3,10 @@
 ## Usage
 
 ### Dependencies
-[PyTorch](https://pytorch.org/get-started/locally/)
+[PyTorch](https://pytorch.org/get-started/locally/) >= 1.6
 and
 ```bash
 conda install tensorboard h5py scikit-image
-pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" git+https://github.com/NVIDIA/apex.git
 ```
 
 ### Train
@@ -20,7 +19,7 @@ python trainer.py --dataset div2k --eval_datasets div2k set5 bsds100 urban100 --
 ```
 We also support multi-GPU and mixed precision training:
 ```bash
-python -m torch.distributed.launch --nproc_per_node=[\#gpu] trainer.py --opt_level O2 [options]
+python -m torch.distributed.launch --nproc_per_node=[\#gpu] trainer.py --amp [options]
 ```
 
 ### Evaluation
