@@ -16,7 +16,7 @@ import common.meters
 import common.modes
 
 if __name__ == '__main__':
-  parser = argparse.ArgumentParser()
+  parser = argparse.ArgumentParser(add_help=False)
   parser.add_argument(
       '--dataset',
       help='Dataset name.',
@@ -110,6 +110,8 @@ if __name__ == '__main__':
   )
   parser.add_argument('--local_rank', default=0, type=int)
   parser.add_argument('--node_rank', default=0, type=int)
+  base_parser = parser
+  parser = argparse.ArgumentParser(parents=[base_parser])
 
   # Parse arguments
   args, _ = parser.parse_known_args()
@@ -142,9 +144,13 @@ if __name__ == '__main__':
     eval_datasets = []
     for eval_dataset in params.eval_datasets:
       eval_dataset_module = importlib.import_module('datasets.' + eval_dataset)
+      eval_parser = argparse.ArgumentParser(parents=[base_parser])
+      eval_dataset_module.update_argparser(eval_parser)
+      model_module.update_argparser(eval_parser)
+      eval_params = eval_parser.parse_args()
       eval_datasets.append(
           (eval_dataset,
-           eval_dataset_module.get_dataset(common.modes.EVAL, params)))
+           eval_dataset_module.get_dataset(common.modes.EVAL, eval_params)))
   else:
     eval_datasets = [(params.dataset,
                       dataset_module.get_dataset(common.modes.EVAL, params))]
