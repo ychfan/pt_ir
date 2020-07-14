@@ -100,6 +100,11 @@ if __name__ == '__main__':
       default=False,
       action='store_true',
       help='Enabling apex sync BN.')
+  parser.add_argument(
+      '--lr_warmup_epochs',
+      help='Number of steps for training logging.',
+      default=None,
+      type=float)
   # Verbose
   parser.add_argument(
       '-v',
@@ -222,6 +227,14 @@ if __name__ == '__main__':
     for batch_idx, (data, target) in enumerate(train_data_loader):
       data = data.to(device, non_blocking=True)
       target = target.to(device, non_blocking=True)
+      if params.lr_warmup_epochs:
+        lr_warmup_status = (
+            epoch - 1 +
+            (batch_idx + 1) / len(train_data_loader)) / params.lr_warmup_epochs
+        if lr_warmup_status < 1:
+          for param_group, lr in zip(optimizer.param_groups,
+                                     lr_scheduler.get_last_lr()):
+            param_group['lr'] = lr * lr_warmup_status
       optimizer.zero_grad()
       output = model(data)
       loss = criterion(output, target)
@@ -241,6 +254,13 @@ if __name__ == '__main__':
         epoch, loss_meter.avg))
     if params.master_proc:
       writer.add_scalar('training_loss', loss_meter.avg, epoch)
+      for i, param_group in enumerate(optimizer.param_groups):
+        writer.add_scalar('learning_rate_{}'.format(i), param_group['lr'],
+                          epoch)
+    if params.lr_warmup_epochs:
+      for param_group, lr in zip(optimizer.param_groups,
+                                 lr_scheduler.get_last_lr()):
+        param_group['lr'] = lr
 
   def evaluate(epoch):
     with torch.no_grad():
