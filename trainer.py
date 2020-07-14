@@ -9,9 +9,6 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
-from apex.parallel import DistributedDataParallel, convert_syncbn_model
-from apex import amp
-
 import common.meters
 import common.modes
 
@@ -91,15 +88,15 @@ if __name__ == '__main__':
       type=int)
   # Performance tuning parameters
   parser.add_argument(
-      '--opt_level',
-      help='Number of GPUs for experiments.',
-      default='O0',
-      type=str)
+      '--amp',
+      default=False,
+      action='store_true',
+      help='Enabling automatic mixed precision training.')
   parser.add_argument(
       '--sync_bn',
       default=False,
       action='store_true',
-      help='Enabling apex sync BN.')
+      help='Enabling sync batch normalization.')
   # Verbose
   parser.add_argument(
       '-v',
@@ -109,7 +106,6 @@ if __name__ == '__main__':
       help='Increasing output verbosity.',
   )
   parser.add_argument('--local_rank', default=0, type=int)
-  parser.add_argument('--node_rank', default=0, type=int)
   base_parser = parser
   parser = argparse.ArgumentParser(parents=[base_parser])
 
@@ -135,8 +131,8 @@ if __name__ == '__main__':
     params.distributed = int(os.environ['WORLD_SIZE']) > 1
   if params.distributed:
     torch.cuda.set_device(params.local_rank)
-    torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    if params.node_rank or params.local_rank:
+    torch.distributed.init_process_group('nccl')
+    if torch.distributed.get_rank():
       params.master_proc = False
 
   train_dataset = dataset_module.get_dataset(common.modes.TRAIN, params)
@@ -187,9 +183,6 @@ if __name__ == '__main__':
   model = model.to(device)
   criterion = criterion.to(device)
 
-  model, optimizer = amp.initialize(
-      model, optimizer, opt_level=params.opt_level, verbosity=params.verbose)
-
   if params.ckpt or os.path.exists(os.path.join(params.job_dir, 'latest.pth')):
     checkpoint = torch.load(
         params.ckpt or os.path.join(params.job_dir, 'latest.pth'),
@@ -210,8 +203,11 @@ if __name__ == '__main__':
 
   if params.distributed:
     if params.sync_bn:
-      model = convert_syncbn_model(model)
-    model = DistributedDataParallel(model)
+      model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    model = torch.nn.parallel.DistributedDataParallel(
+        model, device_ids=(params.local_rank,), output_device=params.local_rank)
+
+  scaler = torch.cuda.amp.GradScaler(enabled=params.amp)
 
   def train(epoch):
     if params.distributed:
@@ -223,11 +219,12 @@ if __name__ == '__main__':
       data = data.to(device, non_blocking=True)
       target = target.to(device, non_blocking=True)
       optimizer.zero_grad()
-      output = model(data)
-      loss = criterion(output, target)
-      with amp.scale_loss(loss, optimizer) as scaled_loss:
-        scaled_loss.backward()
-      optimizer.step()
+      with torch.cuda.amp.autocast(enabled=params.amp):
+        output = model(data)
+        loss = criterion(output, target)
+      scaler.scale(loss).backward()
+      scaler.step(optimizer)
+      scaler.update()
       if batch_idx % params.log_steps == 0:
         loss_meter.update(loss.item(), data.size(0))
         time_meter.update_count(batch_idx + 1)
