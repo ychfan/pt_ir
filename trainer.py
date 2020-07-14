@@ -106,7 +106,6 @@ if __name__ == '__main__':
       help='Increasing output verbosity.',
   )
   parser.add_argument('--local_rank', default=0, type=int)
-  parser.add_argument('--node_rank', default=0, type=int)
 
   # Parse arguments
   args, _ = parser.parse_known_args()
@@ -130,8 +129,8 @@ if __name__ == '__main__':
     params.distributed = int(os.environ['WORLD_SIZE']) > 1
   if params.distributed:
     torch.cuda.set_device(params.local_rank)
-    torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    if params.node_rank or params.local_rank:
+    torch.distributed.init_process_group('nccl')
+    if torch.distributed.get_rank():
       params.master_proc = False
 
   train_dataset = dataset_module.get_dataset(common.modes.TRAIN, params)

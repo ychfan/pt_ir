@@ -21,6 +21,7 @@ We also support multi-GPU and mixed precision training:
 ```bash
 python -m torch.distributed.launch --nproc_per_node=[\#gpu] trainer.py --amp [options]
 ```
+Option `--master_port=$(($RANDOM+($RANDOM%2)*32768))` may help.
 
 ### Evaluation
 ```bash
